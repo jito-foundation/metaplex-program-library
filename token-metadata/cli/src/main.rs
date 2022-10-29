@@ -1,3 +1,4 @@
+use solana_clap_utils::input_parsers::value_of;
 use solana_client::rpc_request::TokenAccountsFilter;
 use solana_sdk::account::ReadableAccount;
 
@@ -5,12 +6,12 @@ use {
     clap::{crate_description, crate_name, crate_version, App, Arg, ArgMatches, SubCommand},
     mpl_token_metadata::{
         instruction::{
-            create_master_edition, create_metadata_accounts,
+            create_master_edition, create_metadata_accounts_v3,
             mint_new_edition_from_master_edition_via_token, puff_metadata_account,
-            update_metadata_accounts,
+            update_metadata_accounts_v2,
         },
         state::{
-            get_reservation_list, Data, Edition, Key, MasterEditionV1, MasterEditionV2, Metadata,
+            get_reservation_list, DataV2, Edition, Key, MasterEditionV1, MasterEditionV2, Metadata,
             EDITION, MAX_NAME_LENGTH, MAX_SYMBOL_LENGTH, MAX_URI_LENGTH, PREFIX,
         },
     },
@@ -488,24 +489,29 @@ fn update_metadata_account_call(
 
     let new_update_authority = pubkey_of(app_matches, "new_update_authority");
 
+    let symbol: Option<String> = value_of(app_matches, "new_symbol");
+
     let metadata_account = client.get_account(&metadata_key).unwrap();
     let metadata: Metadata = try_from_slice_unchecked(&metadata_account.data).unwrap();
 
-    let new_data = Data {
+    let new_data = DataV2 {
         name: name.unwrap_or(metadata.data.name),
-        symbol: metadata.data.symbol,
+        symbol: symbol.unwrap_or(metadata.data.symbol),
         uri: uri.unwrap_or(metadata.data.uri),
         seller_fee_basis_points: 0,
         creators: metadata.data.creators,
+        collection: None,
+        uses: None
     };
 
-    let instructions = [update_metadata_accounts(
+    let instructions = [update_metadata_accounts_v2(
         program_key,
         metadata_key,
         update_authority.pubkey(),
-        new_update_authority,
+         new_update_authority,
         Some(new_data),
         None,
+         Some(true)
     )];
 
     let mut transaction = Transaction::new_with_payer(&instructions, Some(&payer.pubkey()));
@@ -537,7 +543,6 @@ fn create_metadata_account_call(
     let symbol = app_matches.value_of("symbol").unwrap().to_owned();
     let uri = app_matches.value_of("uri").unwrap().to_owned();
     let create_new_mint = !app_matches.is_present("mint");
-    let mutable = app_matches.is_present("mutable");
     let new_mint = Keypair::new();
     let mint_key = match app_matches.value_of("mint") {
         Some(_val) => pubkey_of(app_matches, "mint").unwrap(),
@@ -580,7 +585,8 @@ fn create_metadata_account_call(
         mint.mint_authority.expect("Mint has no mint authority.")
     };
 
-    let new_metadata_instruction = create_metadata_accounts(
+
+    let new_metadata_instruction = create_metadata_accounts_v3(
         program_key,
         metadata_key,
         mint_key,
@@ -592,8 +598,11 @@ fn create_metadata_account_call(
         uri,
         None,
         0,
-        update_authority.pubkey() != payer.pubkey(),
-        mutable,
+        true,
+        true,
+        None,
+        None,
+        None,
     );
 
     instructions.push(new_metadata_instruction);
@@ -743,6 +752,14 @@ fn main() {
                         .required(false)
                         .help("new NAME for the Metadata"),
                 )
+             .arg(
+                 Arg::with_name("symbol")
+                     .long("symbol")
+                     .value_name("SYMBOL")
+                     .takes_value(true)
+                     .required(false)
+                     .help("new SYMBOL for the Metadata"),
+             )
                 .arg(
                     Arg::with_name("new_update_authority")
                         .long("new_update_authority")
