@@ -543,6 +543,7 @@ fn create_metadata_account_call(
     let symbol = app_matches.value_of("symbol").unwrap().to_owned();
     let uri = app_matches.value_of("uri").unwrap().to_owned();
     let create_new_mint = !app_matches.is_present("mint");
+    let is_mutable = !app_matches.is_present("immutable");
     let new_mint = Keypair::new();
     let mint_key = match app_matches.value_of("mint") {
         Some(_val) => pubkey_of(app_matches, "mint").unwrap(),
@@ -599,7 +600,7 @@ fn create_metadata_account_call(
         None,
         0,
         true,
-        true,
+        is_mutable,
         None,
         None,
         None,
@@ -689,12 +690,12 @@ fn main() {
                         .help("Pubkey for an existing mint (random new mint otherwise)"),
                 )
                 .arg(
-                    Arg::with_name("mutable")
-                        .long("mutable")
-                        .value_name("MUTABLE")
+                    Arg::with_name("immutable")
+                        .long("immutable")
+                        .value_name("IMMUTABLE")
                         .takes_value(false)
                         .required(false)
-                        .help("Permit future metadata updates"),
+                        .help("Disallow future metadata updates. WARNING: setting this flag is IRREVERSIBLE"),
                 )
         ).subcommand(
             SubCommand::with_name("mint_coins")
